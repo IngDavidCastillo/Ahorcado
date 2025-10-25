@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Ahorcado</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: white;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            max-width: 900px;
+            width: 100%;
+            margin: 20px 0;
+        }
+
+        .left-panel, .right-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .hangman-canvas {
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto 20px;
+        }
+
+        .word-display {
+            font-size: 36px;
+            letter-spacing: 10px;
+            text-align: center;
+            margin: 20px 0;
+            color: #333;
+            font-weight: bold;
+            min-height: 50px;
+        }
+
+        .keyboard {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .key {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 10px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .key:hover:not(:disabled) {
+            background: #764ba2;
+            transform: scale(1.1);
+        }
+
+        .key:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .status {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            min-height: 30px;
+        }
+
+        .win {
+            color: #28a745;
+        }
+
+        .lose {
+            color: #dc3545;
+        }
+
+        .reset-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 15px 40px;
+            font-size: 18px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .reset-btn:hover {
+            background: #218838;
+            transform: scale(1.05);
+        }
+
+        .stats {
+            text-align: center;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Juego del Ahorcado 🎮</h1>
+    
+    <div class="container">
+        <div class="left-panel">
+            <h2 style="text-align: center; color: #667eea; margin-bottom: 20px;">Muñeco del Ahorcado</h2>
+            <canvas id="hangmanCanvas" class="hangman-canvas" width="300" height="350"></canvas>
+            <div class="stats">
+                <p>Intentos restantes: <span id="attempts">6</span></p>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <h2 style="text-align: center; color: #667eea; margin-bottom: 20px;">Letras Disponibles</h2>
+            <div class="word-display" id="wordDisplay"></div>
+            <div class="status" id="status"></div>
+            <div class="keyboard" id="keyboard"></div>
+            <button class="reset-btn" onclick="resetGame()">Nuevo Juego</button>
+        </div>
+    </div>
+
+    <script>
+        const words = [
+            'JAVASCRIPT', 'PROGRAMACION', 'COMPUTADORA', 'DESARROLLO',
+            'INTERNET', 'TECLADO', 'PANTALLA', 'RATON', 'CODIGO',
+            'ALGORITMO', 'VARIABLE', 'FUNCION', 'NAVEGADOR', 'SISTEMA'
+        ];
+
+        let selectedWord = '';
+        let guessedLetters = [];
+        let wrongGuesses = 0;
+        const maxWrong = 6;
+
+        const canvas = document.getElementById('hangmanCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function drawGallows() {
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            
+            // Base
+            ctx.beginPath();
+            ctx.moveTo(20, 330);
+            ctx.lineTo(150, 330);
+            ctx.stroke();
+            
+            // Poste vertical
+            ctx.beginPath();
+            ctx.moveTo(50, 330);
+            ctx.lineTo(50, 20);
+            ctx.stroke();
+            
+            // Poste horizontal
+            ctx.beginPath();
+            ctx.moveTo(50, 20);
+            ctx.lineTo(200, 20);
+            ctx.stroke();
+            
+            // Cuerda
+            ctx.beginPath();
+            ctx.moveTo(200, 20);
+            ctx.lineTo(200, 60);
+            ctx.stroke();
+        }
+
+        function drawHangman(wrong) {
+            ctx.strokeStyle = '#dc3545';
+            ctx.lineWidth = 3;
+            
+            switch(wrong) {
+                case 1: // Cabeza
+                    ctx.beginPath();
+                    ctx.arc(200, 85, 25, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                case 2: // Cuerpo
+                    ctx.beginPath();
+                    ctx.moveTo(200, 110);
+                    ctx.lineTo(200, 200);
+                    ctx.stroke();
+                    break;
+                case 3: // Brazo izquierdo
+                    ctx.beginPath();
+                    ctx.moveTo(200, 130);
+                    ctx.lineTo(160, 170);
+                    ctx.stroke();
+                    break;
+                case 4: // Brazo derecho
+                    ctx.beginPath();
+                    ctx.moveTo(200, 130);
+                    ctx.lineTo(240, 170);
+                    ctx.stroke();
+                    break;
+                case 5: // Pierna izquierda
+                    ctx.beginPath();
+                    ctx.moveTo(200, 200);
+                    ctx.lineTo(170, 260);
+                    ctx.stroke();
+                    break;
+                case 6: // Pierna derecha
+                    ctx.beginPath();
+                    ctx.moveTo(200, 200);
+                    ctx.lineTo(230, 260);
+                    ctx.stroke();
+                    break;
+            }
+        }
+
+        function createKeyboard() {
+            const keyboard = document.getElementById('keyboard');
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+            
+            keyboard.innerHTML = '';
+            letters.forEach(letter => {
+                const button = document.createElement('button');
+                button.textContent = letter;
+                button.className = 'key';
+                button.onclick = () => guessLetter(letter);
+                keyboard.appendChild(button);
+            });
+        }
+
+        function displayWord() {
+            const display = selectedWord.split('').map(letter => 
+                guessedLetters.includes(letter) ? letter : '_'
+            ).join(' ');
+            document.getElementById('wordDisplay').textContent = display;
+        }
+
+        function guessLetter(letter) {
+            if (guessedLetters.includes(letter)) return;
+            
+            guessedLetters.push(letter);
+            
+            const buttons = document.querySelectorAll('.key');
+            buttons.forEach(btn => {
+                if (btn.textContent === letter) {
+                    btn.disabled = true;
+                }
+            });
+
+            if (!selectedWord.includes(letter)) {
+                wrongGuesses++;
+                drawHangman(wrongGuesses);
+                document.getElementById('attempts').textContent = maxWrong - wrongGuesses;
+            }
+
+            displayWord();
+            checkGameStatus();
+        }
+
+        function checkGameStatus() {
+            const won = selectedWord.split('').every(letter => guessedLetters.includes(letter));
+            const lost = wrongGuesses >= maxWrong;
+
+            if (won) {
+                document.getElementById('status').textContent = '¡Ganaste! 🎉';
+                document.getElementById('status').className = 'status win';
+                disableAllKeys();
+            } else if (lost) {
+                document.getElementById('status').textContent = `Perdiste 😢 La palabra era: ${selectedWord}`;
+                document.getElementById('status').className = 'status lose';
+                disableAllKeys();
+            }
+        }
+
+        function disableAllKeys() {
+            const buttons = document.querySelectorAll('.key');
+            buttons.forEach(btn => btn.disabled = true);
+        }
+
+        function resetGame() {
+            selectedWord = words[Math.floor(Math.random() * words.length)];
+            guessedLetters = [];
+            wrongGuesses = 0;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGallows();
+            
+            document.getElementById('status').textContent = '';
+            document.getElementById('status').className = 'status';
+            document.getElementById('attempts').textContent = maxWrong;
+            
+            createKeyboard();
+            displayWord();
+        }
+
+        // Iniciar el juego
+        resetGame();
+    </script>
+</body>
+</html>
